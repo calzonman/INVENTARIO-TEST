@@ -27,16 +27,14 @@ app = FastAPI(
     lifespan=lifespan # <--- CONECTAR AQUÍ
 )
 
-# Configuración de CORS
-origins = [
-    "http://localhost:5173",
-    "http://localhost:3000",
-    "https://inventario-test.vercel.app",
-]
+# --- CONFIGURACIÓN DE CORS (CORREGIDA) ---
+# Usamos Regex para permitir cualquier URL de Vercel (Prod y Previews) y Localhost
+# Esto soluciona el error de "allow_origins=['*']" con credenciales.
+origin_regex = r"^(http://localhost:\d+|https://.*\.vercel\.app|https://.*\.railway\.app)$"
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origin_regex=origin_regex, # <--- MÁS SEGURO Y COMPATIBLE
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
