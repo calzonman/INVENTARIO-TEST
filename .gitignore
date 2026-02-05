@@ -1,0 +1,37 @@
+# --- GENERAL ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.log
+
+# --- PYTHON (Backend) ---
+__pycache__/
+*.py[cod]
+*$py.class
+# Entornos virtuales
+venv/
+env/
+.env
+.venv/
+# Librerías y caché
+.pytest_cache/
+.mypy_cache/
+
+# --- NODE.JS / SVELTE (Frontend) ---
+node_modules/
+dist/
+.svelte-kit/
+build/
+coverage/
+
+# --- MEDIO AMBIENTE Y SECRETOS (¡MUY IMPORTANTE!) ---
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# --- ARCHIVOS DE SALIDA ---
+# Si generas CSVs de reportes y quedan en la carpeta
+*.csv

@@ -1,0 +1,27 @@
+@import './theme.css';
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    /* Hemos quitado outline-ring/50 porque causa el error y no es necesaria */
+    @apply border-border; 
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+
+  /* Tipografía base adaptada de tu diseño original */
+  h1 {
+    @apply text-2xl font-medium;
+  }
+  h2 {
+    @apply text-xl font-medium;
+  }
+  h3 {
+    @apply text-lg font-medium;
+  }
+}
