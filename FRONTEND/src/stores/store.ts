@@ -1,6 +1,19 @@
 import { writable, get } from 'svelte/store';
 
-const API_URL = 'http://localhost:8000';
+// =========================================================
+// CAMBIO PARA RAILWAY:
+// Forzamos el uso de la variable de entorno de Vercel.
+// Eliminamos la opción "localhost" para evitar errores de CORS y Mixed Content.
+// =========================================================
+const API_URL = import.meta.env.VITE_API_URL;
+
+// Validación de seguridad (Te avisará en la consola del navegador si falta la variable)
+if (!API_URL) {
+    console.error("🚨 ERROR CRÍTICO: No se detectó VITE_API_URL. Configúrala en Vercel.");
+} else {
+    console.log("🌍 Conectado a Backend:", API_URL);
+}
+// =========================================================
 
 // --- INTERFACES ---
 export interface Product {
