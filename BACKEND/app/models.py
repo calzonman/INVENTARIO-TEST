@@ -128,3 +128,11 @@ class KioskResponse(BaseModel):
     # --- NUEVOS CAMPOS ---
     expiry_status: str = "ok" # 'ok', 'soon', 'expired'
     expiry_date: Optional[datetime] = None
+
+# --- Lista para correos electronicos ---
+from typing import List
+
+class TenantSettingsModel(MongoBaseModel):
+    tenant_id: str
+    notification_emails: List[EmailStr] = []  # Lista de correos para alertas
+    low_stock_threshold: int = 10             # Podemos guardar esto también aquí

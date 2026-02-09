@@ -1,11 +1,14 @@
 <script lang="ts">
   import { fade, slide, scale } from 'svelte/transition';
-  import { Plus, Search, Edit, Trash2, FileDown, AlertTriangle, X, PackageCheck, QrCode, Download, Printer, CheckCircle2 } from 'lucide-svelte'; // Añadí iconos
-  import QRCode from 'qrcode'; // <--- IMPORTANTE: Librería QR
+  import { onMount } from 'svelte'; 
+  import { Plus, Search, Edit, Trash2, FileDown, AlertTriangle, X, PackageCheck, QrCode, Download, Printer, CheckCircle2 } from 'lucide-svelte'; 
+  import QRCode from 'qrcode'; 
   import { 
     products, 
     lots, 
-    currentTenant, 
+    currentTenant,
+    locations,      
+    loadLocations,  
     addProduct,     
     deleteProduct,
     createLot,
@@ -20,7 +23,7 @@
   // Control de Modales
   let isAddDialogOpen = false;
   let isEditDialogOpen = false;
-  let isQrModalOpen = false; // <--- NUEVO: Modal de QR generado
+  let isQrModalOpen = false; 
   
   let selectedProduct: Product | null = null;
   let isSubmitting = false;
@@ -38,6 +41,11 @@
     location: '', currentStock: 0, minStock: 5, unitPrice: 0,
     lotNumber: '', lotExpiry: ''
   };
+
+  // Cargar ubicaciones al iniciar
+  onMount(async () => {
+    await loadLocations();
+  });
 
   // --- AUTO-APERTURA SI VIENE DEL ESCÁNER ---
   $: if ($pendingBarcode) {
@@ -86,7 +94,7 @@
       }
   }
 
-  // --- NUEVA FUNCIÓN: GENERAR QR ---
+  // --- GENERAR QR (Lógica Central) ---
   async function generateProductQR(barcode: string, lot: string, date: string) {
       try {
           // Formato solicitado: "codigo/lote/fecha"
@@ -111,6 +119,33 @@
           isQrModalOpen = true; // Abrir modal de éxito
       } catch (err) {
           console.error(err);
+      }
+  }
+
+  // --- NUEVA FUNCIÓN CORREGIDA: VER QR DESDE LA LISTA ---
+  function handleShowQr(product: Product) {
+      const code = product.barcode || product.sku;
+      
+      // 1. Buscamos si el producto tiene lotes activos en el sistema
+      // (Filtramos los lotes que pertenecen a este producto y tienen stock)
+      const associatedLots = $lots.filter(l => l.productId === product.id && l.quantity > 0);
+
+      if (associatedLots.length > 0) {
+          // 2. Si tiene lotes, tomamos el primero (o el más reciente) para mostrar la info completa
+          const activeLot = associatedLots[0];
+          
+          // Formatear fecha
+          let dateStr = '';
+          if (activeLot.expiryDate) {
+              // Extraer solo YYYY-MM-DD
+              dateStr = new Date(activeLot.expiryDate).toISOString().split('T')[0];
+          }
+
+          // 3. Generar QR COMPLETO (Código / Lote / Fecha)
+          generateProductQR(code, activeLot.number, dateStr);
+      } else {
+          // 4. Si no tiene lotes (stock simple o agotado), mostramos solo el código
+          generateProductQR(code, '', '');
       }
   }
 
@@ -151,7 +186,7 @@
         
         isAddDialogOpen = false;
         
-        // --- AQUÍ LA MAGIA: Generar QR al finalizar ---
+        // Generar QR al finalizar creación
         await generateProductQR(tempBarcode, tempLot, tempExpiry);
 
         resetForm();
@@ -163,7 +198,9 @@
   }
 
   async function handleDeleteProduct(id: string) {
-    await deleteProduct(id);
+    if(confirm('¿Está seguro de eliminar este producto?')) {
+        await deleteProduct(id);
+    }
   }
 
   function openEdit(product: Product) {
@@ -185,7 +222,6 @@
   }
 
   function exportProducts() {
-    /* ... (lógica existente de exportación) ... */
     const headers = ['SKU', 'Código', 'Nombre', 'Categoría', 'Stock', 'Ubicación', 'Precio'];
     const rows = filteredProducts.map(p => [ p.sku, p.barcode, p.name, p.category, p.currentStock, p.location, p.unitPrice ]);
     const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n");
@@ -258,12 +294,27 @@
               </td>
               <td class="px-6 py-4">{product.location}</td>
               <td class="px-6 py-4">${product.unitPrice}</td>
+              
               <td class="px-6 py-4 text-right">
                 <div class="flex justify-end gap-2">
-                    <button on:click={() => openEdit(product)} class="p-1 hover:bg-slate-200 rounded text-slate-500"><Edit class="w-4 h-4"/></button>
-                    <button on:click={() => handleDeleteProduct(product.id)} class="p-1 hover:bg-red-50 rounded text-red-600"><Trash2 class="w-4 h-4"/></button>
+                    <button 
+                        on:click={() => handleShowQr(product)} 
+                        class="p-1 hover:bg-blue-50 rounded text-slate-500 hover:text-blue-600 transition-colors"
+                        title="Ver Código QR"
+                    >
+                        <QrCode class="w-4 h-4"/>
+                    </button>
+                    
+                    <button on:click={() => openEdit(product)} class="p-1 hover:bg-slate-200 rounded text-slate-500" title="Editar">
+                        <Edit class="w-4 h-4"/>
+                    </button>
+                    
+                    <button on:click={() => handleDeleteProduct(product.id)} class="p-1 hover:bg-red-50 rounded text-red-600" title="Eliminar">
+                        <Trash2 class="w-4 h-4"/>
+                    </button>
                 </div>
               </td>
+
             </tr>
           {:else}
             <tr><td colspan="7" class="px-6 py-12 text-center text-slate-500">No se encontraron productos</td></tr>
@@ -302,10 +353,20 @@
               <label class="text-sm font-medium">Categoría *</label>
               <input type="text" bind:value={formData.category} class="w-full border rounded-md p-2" />
             </div>
+            
             <div class="space-y-2">
               <label class="text-sm font-medium">Ubicación *</label>
-              <input type="text" bind:value={formData.location} class="w-full border rounded-md p-2" />
+              <select bind:value={formData.location} class="w-full border rounded-md p-2 bg-white">
+                <option value="" disabled selected>-- Seleccionar --</option>
+                {#each $locations as loc}
+                  <option value={loc.name}>{loc.name}</option>
+                {/each}
+                {#if $locations.length === 0}
+                  <option value="" disabled>Sin ubicaciones (Crear en Config)</option>
+                {/if}
+              </select>
             </div>
+
           </div>
 
           <div class="grid grid-cols-3 gap-4">
@@ -405,12 +466,12 @@
     <div class="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm" transition:fade>
         <div class="bg-white rounded-lg shadow-2xl w-full max-w-sm overflow-hidden" transition:scale>
             <div class="bg-green-600 p-4 text-white flex justify-between items-center">
-                <h3 class="font-bold flex items-center gap-2"><CheckCircle2 class="w-5 h-5" /> Producto Creado</h3>
+                <h3 class="font-bold flex items-center gap-2"><CheckCircle2 class="w-5 h-5" /> Código QR</h3>
                 <button on:click={() => isQrModalOpen = false} class="hover:bg-green-700 p-1 rounded-full"><X class="w-5 h-5"/></button>
             </div>
             
             <div class="p-6 flex flex-col items-center text-center">
-                <p class="text-slate-600 text-sm mb-4">La etiqueta QR ha sido generada con el formato de trazabilidad.</p>
+                <p class="text-slate-600 text-sm mb-4">Etiqueta de producto generada.</p>
                 
                 <div class="bg-white border-2 border-slate-900 p-2 rounded-lg mb-2">
                     <img src={generatedQrUrl} alt="QR Code" class="w-48 h-48" />

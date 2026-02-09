@@ -1,59 +1,70 @@
-# app/services/scheduler.py
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
-from app.database import db # Asegúrate que esto importe tu objeto database de motor
+from app.database import db
 from app.services.email import send_expiry_alert
 from datetime import datetime
+import os
 
 scheduler = AsyncIOScheduler()
 
+# Reemplaza tu función check_expired_lots con esta versión Multi-Tenant
 async def check_expired_lots():
-    """
-    Tarea programada: Busca lotes vencidos no notificados y envía alerta.
-    """
-    print(f"⏰ [Scheduler] Ejecutando revisión de vencimientos: {datetime.now()}")
-    
+    print(f"⏰ [Scheduler] Revisando vencimientos...")
     now = datetime.utcnow()
     
-    # 1. Buscar lotes: Vencidos + Con Stock + No notificados
+    # 1. Buscar TODOS los lotes vencidos
     query = {
         "expiry_date": {"$lt": now},
         "quantity": {"$gt": 0},
-        "alert_sent": False # Solo los que no hemos avisado
+        "alert_sent": False
     }
     
-    expired_lots_cursor = db.Lotes.find(query)
-    expired_lots = await expired_lots_cursor.to_list(length=100)
+    cursor = db.Lotes.find(query)
+    all_expired = await cursor.to_list(length=1000)
     
-    if not expired_lots:
-        print("✅ [Scheduler] No hay nuevos lotes vencidos.")
+    if not all_expired:
         return
 
-    print(f"⚠️ [Scheduler] Se encontraron {len(expired_lots)} lotes vencidos.")
+    # 2. Agrupar por Tenant (Empresa)
+    # Estructura: { "tenant_123": [lote1, lote2], "tenant_456": [lote3] }
+    lots_by_tenant = {}
+    for lote in all_expired:
+        t_id = lote.get("tenant_id")
+        if t_id:
+            if t_id not in lots_by_tenant:
+                lots_by_tenant[t_id] = []
+            lots_by_tenant[t_id].append(lote)
 
-    # 2. Enviar Email (Para MVP enviamos a un admin fijo o variable de entorno)
-    # En producción, aquí buscarías el email del admin del tenant correspondiente.
-    import os
-    admin_email = os.getenv("ADMIN_EMAIL_NOTIFY", "tu_email_real@gmail.com")
-    
-    try:
-        await send_expiry_alert(admin_email, expired_lots)
-        print("📧 [Scheduler] Correo enviado exitosamente.")
+    # 3. Procesar cada empresa por separado
+    for tenant_id, lotes in lots_by_tenant.items():
+        # A) Buscar configuración de esa empresa
+        settings = await db.TenantSettings.find_one({"tenant_id": tenant_id})
         
-        # 3. Marcar lotes como notificados para no repetir el correo mañana
-        lot_ids = [lote["_id"] for lote in expired_lots]
-        await db.lots.update_many(
-            {"_id": {"$in": lot_ids}},
-            {"$set": {"alert_sent": True}}
-        )
-        print("📝 [Scheduler] Lotes actualizados (flag alert_sent=True).")
+        destinatarios = []
+        if settings and "notification_emails" in settings:
+            destinatarios = settings["notification_emails"]
         
-    except Exception as e:
-        print(f"❌ [Scheduler] Error enviando alerta: {e}")
+        # Fallback: Si no configuraron nada, enviar al admin general del .env (opcional)
+        if not destinatarios:
+            admin_env = os.getenv("ADMIN_EMAIL_NOTIFY")
+            if admin_env: destinatarios = [admin_env]
+
+        if destinatarios:
+            print(f"📧 Enviando alerta a {tenant_id}: {destinatarios}")
+            try:
+                await send_expiry_alert(destinatarios, lotes)
+                
+                # B) Marcar como enviados SOLO para estos lotes
+                ids = [l["_id"] for l in lotes]
+                await db.Lotes.update_many(
+                    {"_id": {"$in": ids}},
+                    {"$set": {"alert_sent": True}}
+                )
+            except Exception as e:
+                print(f"❌ Error enviando a {tenant_id}: {e}")
+        else:
+            print(f"⚠️ Tenant {tenant_id} tiene lotes vencidos pero NO tiene correos configurados.")
 
 def start_scheduler():
-    # Ejecuta la tarea todos los días a las 8:00 AM (o cada minuto para probar si pones 'minutes=1')
-    #scheduler.add_job(check_expired_lots, 'cron', hour=8, minute=0)
-    # Para pruebas rápidas, descomenta la siguiente línea (ejecuta cada 30 segs):
-    scheduler.add_job(check_expired_lots, 'interval', seconds=300)
-    
+    # Ejecuta cada 24 horas (ajusta 'seconds=60' si quieres probarlo rápido en la demo)
+    scheduler.add_job(check_expired_lots, 'interval', seconds=10)
     scheduler.start()

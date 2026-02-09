@@ -1,27 +1,16 @@
-import os
 from datetime import datetime, timedelta
 from typing import Optional
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 from fastapi.security import OAuth2PasswordBearer
 from fastapi import Depends, HTTPException, status
-from dotenv import load_dotenv  # Importamos dotenv
 from app.database import db
 from app.models import UserModel
 
-# CARGAR VARIABLES DE ENTORNO
-load_dotenv()
-
-# CONFIGURACIÓN SEGURA
-# Si no encuentra la variable en el .env, usa un valor por defecto (útil para dev) pero avisa
-SECRET_KEY = os.getenv("SECRET_KEY")
-if not SECRET_KEY:
-    # Esto asegura que no arranque en producción sin clave
-    print("⚠️ ADVERTENCIA: SECRET_KEY no está definida en .env") 
-    SECRET_KEY = "insecure_dev_key" 
-
-ALGORITHM = os.getenv("ALGORITHM", "HS256")
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", 480))
+# CONFIGURACIÓN (Mover a .env en producción)
+SECRET_KEY = "TU_SECRETO_SUPER_SEGURO_CAMBIALO_EN_PRODUCCION"
+ALGORITHM = "HS256"
+ACCESS_TOKEN_EXPIRE_MINUTES = 480 # 8 horas de sesión
 
 # Contexto de encriptación
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")

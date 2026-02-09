@@ -1,6 +1,6 @@
 import { writable, get } from 'svelte/store';
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_URL = 'http://localhost:8000';
 
 // --- INTERFACES ---
 export interface Product {
@@ -444,4 +444,33 @@ export const deleteLocation = async (id: string) => {
         headers: getAuthHeaders()
     });
     await loadLocations();
+};
+// --- Para manejar los correos electronicos de alertas ---
+
+// Interfaz para usar en el frontend
+export interface TenantSettings {
+    tenant_id: string;
+    notification_emails: string[];
+}
+
+// Cargar configuración
+export const loadTenantSettings = async (): Promise<TenantSettings> => {
+    const tenantId = get(currentTenant).id;
+    try {
+        const res = await fetch(`${API_URL}/settings/${tenantId}`, {
+            headers: getAuthHeaders()
+        });
+        if (res.ok) return await res.json();
+    } catch (e) { console.error(e); }
+    return { tenant_id: tenantId, notification_emails: [] };
+};
+
+// Guardar configuración
+export const saveTenantEmails = async (emails: string[]) => {
+    const tenantId = get(currentTenant).id;
+    await fetch(`${API_URL}/settings/${tenantId}`, {
+        method: 'PUT',
+        headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ emails }) // Enviamos body: { "emails": [...] }
+    });
 };
