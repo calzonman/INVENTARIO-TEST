@@ -66,5 +66,5 @@ async def check_expired_lots():
 
 def start_scheduler():
     # Ejecuta cada 24 horas (ajusta 'seconds=60' si quieres probarlo rápido en la demo)
-    scheduler.add_job(check_expired_lots, 'interval', seconds=10)
+    scheduler.add_job(check_expired_lots, 'interval', hours=10)
     scheduler.start()
